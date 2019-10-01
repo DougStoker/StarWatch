@@ -52,6 +52,29 @@
         let itfillb = '#99ff00';
         var itfill = itfilla;
 
+
+        class vec2{
+            constructor(x,y){
+                this.x = x
+                this.y = y
+            }
+            add_vec =(other)=>{
+                this.x += other.x
+                this.y += other.y
+            }
+            divide_num =(number)=>{
+                this.y /= number
+                this.x /= number
+            }
+            times_num =(num)=>{
+                this.y *= num
+                this.x *= num
+            }
+            mod_xy =(x,y)=>{
+                this.y %= y
+                this.x %= x
+            }
+        }
         var cango = true;
 
         var socket = io('//:3000') // for localhost testing
@@ -61,8 +84,8 @@
             var myGamePiece = gamePieces[myUUID];
             socket.emit('move', {
                 uuid: myUUID,
-                x: myGamePiece.x,
-                y: myGamePiece.y,
+                x: myGamePiece.pos.x,
+                y: myGamePiece.pos.y,
                 color: myColor
             });
         })
@@ -186,8 +209,8 @@
             gamePieces[myUUID] = new component(pieceWidth, pieceHeight, myColor, 595, 20);
             socket.emit('move', {
                 uuid: myUUID,
-                x: gamePieces[myUUID].x,
-                y: gamePieces[myUUID].y,
+                x: gamePieces[myUUID].pos.x,
+                y: gamePieces[myUUID].pos.y,
                 color: myColor
             });
         }
@@ -196,10 +219,12 @@
             this.width = width;
             this.height = height;
             this.radius = width/2; // for circles
-            this.speedX = 0;
-            this.speedY = 0;
-            this.x = x;
-            this.y = y;
+            //this.speedX = 0;
+            //this.speedY = 0;
+            //this.x = x;
+            //this.y = y;
+            this.vel = new vec2(0,0)
+            this.pos = new vec2(x,y)
             this.shipImage = new Image();
             this.shipImage.src = 'ship.jpg';
             this.update = function (it,itcolor) {
@@ -211,7 +236,7 @@
                 // A circle
                 let radius = this.radius;
                 ctx.beginPath();
-                ctx.arc(this.x,this.y,radius,0,2*Math.PI)
+                ctx.arc(this.pos.x,this.pos.y,radius,0,2*Math.PI)
                 ctx.fillStyle = color;
                 ctx.fill();
 
@@ -227,7 +252,7 @@
                     
                     // A circle in the middle
                     ctx.beginPath();
-                    ctx.arc(this.x, this.y, ptf, 0, 2*Math.PI)
+                    ctx.arc(this.pos.x, this.pos.y, ptf, 0, 2*Math.PI)
                     ctx.fill();
                     // A square in the middle
                     //ctx.fillRect(this.x + (pieceWidth / ptf), this.y + (pieceHeight / ptf), this.width - ((
@@ -244,21 +269,25 @@
                 }
             }
             this.newPos = function () {
-                if (this.x + this.speedX + pieceWidth < 0 ) {
+                if (this.x + this.vel.x + pieceWidth < 0 ) {
                     this.x += myGameArea.canvas.width + pieceWidth;
                 } else if (this.x + this.speedX > myGameArea.canvas.width) {
                     this.x -= myGameArea.canvas.width + pieceWidth;
                 } else {
-                    this.x += this.speedX;
+                    this.x += this.vel.x;
                 }
-                if (this.y + this.speedY + pieceHeight < 0) {
+                if (this.posy + this.vel.y + pieceHeight < 0) {
                     this.y += myGameArea.canvas.height + pieceHeight;
-                } else if (this.y + this.speedY > myGameArea.canvas.height) {
+                } else if (this.pos.y + this.vel.y > myGameArea.canvas.height) {
                     this.y -= myGameArea.canvas.height  + pieceHeight;
                 } else {
                     this.y += this.speedY;
                 }
 
+            }
+            this.updatePos = function(){
+                this.pos.add_vec(this.vel)
+                this.pos.mod_xy(myGameArea.canvas.width,myGameArea.canvas.height)
             }
         }
 
