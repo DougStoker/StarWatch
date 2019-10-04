@@ -1,6 +1,11 @@
 "use strict"
 import {Vmath} from "./modules/vmath.js"
 import {uuidv4,getRandomColor,getRandomInt,wrapMod} from "./modules/funcs.js"
+
+console.log(Vmath)
+
+
+
 let myUUID = uuidv4();
 var gamePieces = {};
 let myColor = getRandomColor();
@@ -8,57 +13,14 @@ var itUUID;
 let imit = false;
 let pieceWidth = 30;
 let pieceHeight = 30;
-let itfilla = '#aa0000';
-let itfillb = '#99ff00';
+const itfilla = '#aa0000';
+const itfillb = '#99ff00';
 var itfill = itfilla;
 const GAME_FRICTION = 0.975 // 1 = no friction , 0 = can't move
-const PLAYER_MASS = 15
+const PLAYER_MASS = 20
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
-const BOUNCINESS = 0.3 ;  //1  = 100% bounce 
-
-//const wrapMod = (x, n) => (x % n + n) % n
-
-/* var Vmath = {
-    dot_product(v1,v2){
-        return v1.x*v2.x + v1.y*v2.y
-    },
-    divide_num : function(vec,num){
-        return {x:vec.x / num,
-                y:vec.y / num}
-    },
-    magnitude : function(vec){
-        return Math.sqrt(vec.x * vec.x + vec.y * vec.y)
-    },
-    wrap_mod_xy : function(v, vx, vy){      
-        return {x: wrapMod(v.x, vx),
-                y: wrapMod(v.y, vy)}
-    },
-    add_vec : function(a,b){
-        return {x: a.x + b.x,
-                y: a.y + b.y}
-    },
-    times_num : function(v,num){
-        return{x: v.x * num,
-               y: v.y * num}
-    },
-    invert : function(v){
-        return{x: -v.x,
-               y: -v.y}
-    },
-    sub_vec: function(v1,v1){
-        return({x:v1.x-v2.x,
-                y:v1.y-v2.y})
-    },
-    normalize: function(v){
-        return Vmath.divide_num(v,Vmath.magnitude(v))
-    },
-    times_componentwise : function(v1,v2){
-        return{x: v1.x * v2.x,
-               y: v1.y * v2.y}
-    },
-} */
-
+const BOUNCINESS = 1 ;  //1  = 100% bounce 
 
 var cango = true;
 
@@ -94,6 +56,7 @@ socket.on('moved', function(data) {
     //console.log(data);
     // This is where we parse the data object for the new box to draw
     if (typeof gamePieces[data.uuid] != "undefined") {
+
         //gamePieces[data.uuid].pos.x = data.x;
         //gamePieces[data.uuid].pos.y = data.y;
         gamePieces[data.uuid].pos = data.pos
@@ -205,17 +168,17 @@ function startGame() {
     });
 }
 
-function component(width, height, color, x, y) {
+function component(width, height, color, x, y,mass=PLAYER_MASS) {
     this.width = width;
     this.height = height;
     this.radius = width / 2; // for circles
-    this.mass = PLAYER_MASS
+    this.mass = mass
 
     this.vel = {x:0,y:0}
     this.pos = {x:x,y:y}
     this.shipImage = new Image();
     this.shipImage.src = 'ship.jpg';
-    this.alreadyCollided  = false;
+    this.noCollide  = false;
     this.update = function(it, itcolor) {
             let ctx = myGameArea.context;
 
@@ -260,6 +223,13 @@ function component(width, height, color, x, y) {
 
     this.updatePos = function() {
         //console.log(`[[${this.pos.x},${this.pos.y}],[${this.vel.x},${this.vel.y}]]`)
+
+        //if (NaN in this.vel || NaN in this.pos){throw this}
+        //for(let k of [this.vel.x,this.vel.y,this.pos.x,this.pos.y]){
+        //    if(k===NaN){throw this}
+        //}
+
+
         this.pos = Vmath.add_vec(this.pos,this.vel)
         this.pos = Vmath.wrap_mod_xy(this.pos,GAME_WIDTH, GAME_HEIGHT)
         this.brake(GAME_FRICTION)
@@ -269,10 +239,14 @@ function component(width, height, color, x, y) {
                 if (checkOverlap(this, gamePieces[uuid])) {
                     //myGamePiece.newPos()
                         //console.log('overlap! ' + myUUID + " - " + uuid);
-                    if(! this.alreadyCollided){
-                        calcBounce(this, gamePieces[uuid])
-                        this.alreadyCollided = true
+                    //if th
+                    if(!this.overlap){
+                        calcBounce(this, gamePieces[uuid],myUUID,uuid)
+                        //this.noCollide = true
                     }
+                    //else{
+                     //   this.noCollide = false
+                    //}
                     if (imit && !this.overlap) {
                         socket.emit('tagged', {
                             olduuid: myUUID,
@@ -283,14 +257,14 @@ function component(width, height, color, x, y) {
                     this.overlap = true;
                 } else {
                     this.overlap = false;
-                    this.alreadyCollided=false
+                    //this.alreadyCollided=false
                 }
             }
             gamePieces[uuid].update(uuid == itUUID, itfill); 
         }
     }
     this.acel = function(force) {
-        newV = Vmath.divide_num(force,this.mass)
+        let newV = Vmath.divide_num(force,this.mass)
         this.vel = Vmath.add_vec(this.vel,newV)
     }
     this.brake = function(num) {
@@ -401,7 +375,7 @@ function updateGameArea() {
 
 function changeItColor(){itfill = (itfill === itfilla) ? itfillb : itfilla}
 
- function calcBounce(obj1,obj2){
+function calcBounce(obj1,obj2,uuid1,uuid2){
     //let mag1 = Vmath.magnitude(obj1.vel)
     //let mag2 = Vmath.magnitude(obj2.vel)
     //let dir1= {x:1,y:1}
@@ -417,22 +391,34 @@ function changeItColor(){itfill = (itfill === itfilla) ? itfillb : itfilla}
     let b1 = Vmath.sub_vec(obj1.vel,obj2.vel)
     let a2 = Vmath.sub_vec(obj2.pos,obj1.pos)
     let b2 = Vmath.sub_vec(obj2.vel,obj1.vel)
+
+    let aa1 = Vmath.times_num(Vmath.normalize(a1),obj1.radius+obj2.radius)
+    let aa2 = Vmath.times_num(Vmath.normalize(a2),obj1.radius+obj2.radius)
+
+
     let c1 = (2*obj2.mass)/sumMass
     let c2 = (2*obj1.mass)/sumMass
-    let d1 = Vmath.dot_product(a1,b1)
-    let d2 = Vmath.dot_product(a2,b2)
-    let e1 = Vmath.magnitude(a1)
+    let d1 = Vmath.dot_product(aa1,b1)
+    let d2 = Vmath.dot_product(aa2,b2)
+    let e1 = Vmath.magnitude(aa1)
     e1 = e1*e1 
-    let e2 = Vmath.magnitude(a2)
+    let e2 = Vmath.magnitude(aa2)
     e2 = e2*e2
-    let f1 = Vmath.divide_num(d1,e1)
-    let f2 = Vmath.divide_num(d2,e2)
-    let g1 = Vmath.times_componentwise(f1,a1)
-    let g2 = Vmath.times_componentwise(f2,a2)
+    //let f1 = Vmath.divide_num(d1,e1)
+    //let f2 = Vmath.divide_num(d2,e2)
+    let f1 = d1 / e1
+    let f2 = d2 / e2
+    let g1 = Vmath.times_num(aa1,f1)
+    let g2 = Vmath.times_num(aa2,f2)
     let h1 = Vmath.times_num(g1,c1)
     let h2 = Vmath.times_num(g2,c2)
-    let final1 = Vmath.times_num(h1,BOUNCINESS)
-    let final2 = Vmath.times_num(h2,BOUNCINESS)
+    let i1 = Vmath.sub_vec(obj1.vel,h1)
+    let i2 = Vmath.sub_vec(obj2.vel,h2)
+
+    let final1 = Vmath.times_num(i1,BOUNCINESS)
+    let final2 = Vmath.times_num(i2,BOUNCINESS)
+
+    //console.log({a1,b1,c1,d1,e1,f1,g1,h1,final1,a2,b2,c2,d2,e2,f2,g2,h2,final2})
 
     //let i1 = Vmath.invert(dir1)
     //let final1 = Vmath.times_num(i1,v1*BOUNCINESS)
@@ -440,6 +426,20 @@ function changeItColor(){itfill = (itfill === itfilla) ? itfillb : itfilla}
     //let final2 = Vmath.times_num(i2,v2*BOUNCINESS)
     obj1.newVel(final1)
     obj2.newVel(final2)
+
+    socket.emit('move', {
+        uuid: uuid1,
+        pos: obj1.pos,
+        vel: obj1.vel,
+        color: obj1.color
+    }); 
+
+     socket.emit('move', {
+        uuid: uuid2,
+        pos: obj2.pos,
+        vel: obj2.vel,
+        color: obj2.color
+    });
 
 } 
 
@@ -475,33 +475,6 @@ function checkOverlap(piece1, piece2) {
         return false
     }
 }
-
-
-/* function uuidv4() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0,
-            v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-function getRandomColor() {
-    var letters = '0123456789ABCDEF';
-    var color = '#';
-    for (var i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-    }
-    return color;
-}
-
-function getRandomInt(max, min) {
-    if (min == null || min == undefined) {
-        min = 0
-    }
-    return Math.floor(Math.random() * Math.floor(max - min) + min)
-} */
-
-
 
 
 startGame()

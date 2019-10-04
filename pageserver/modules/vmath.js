@@ -33,6 +33,14 @@ var Vmath = {
     },
     normalize: function(v){
         return Vmath.divide_num(v,Vmath.magnitude(v))
+    },
+    times_componentwise : function(v1,v2){
+        return{x: v1.x * v2.x,
+               y: v1.y * v2.y}
+    },
+    num_div_vec : function(num,v){
+        return{x:num/v.x,
+               y:num/v.y}
     }
 }
 
