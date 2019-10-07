@@ -8,11 +8,12 @@ console.log(Vmath)
 
 let myUUID = uuidv4();
 var gamePieces = {};
+var NPCs = {}
 let myColor = getRandomColor();
 var itUUID;
 let imit = false;
-let pieceWidth = 30;
-let pieceHeight = 30;
+let pieceWidth = 60;
+let pieceHeight = 60;
 const itfilla = '#aa0000';
 const itfillb = '#99ff00';
 var itfill = itfilla;
@@ -23,6 +24,9 @@ const GAME_HEIGHT = 720;
 const BOUNCINESS = 1 ;  //1  = 100% bounce 
 
 var cango = true;
+
+
+const rads = function(n){return ((n*3.14159265359)/180)/* %6.283185307179586 */}
 
 var socket = io('//:3000') // for localhost testing
     //var socket = io('https://nightwatch-server.now.sh')
@@ -150,6 +154,10 @@ var myGameArea = {
     }
 }
 
+
+
+
+
 function updateRefresh() {
     clearInterval(myGameArea.interval);
     clearInterval(myGameArea.interval2);
@@ -160,40 +168,74 @@ function updateRefresh() {
 function startGame() {
     myGameArea.start();
     gamePieces[myUUID] = new component(pieceWidth, pieceHeight, myColor, getRandomInt(0,GAME_WIDTH), getRandomInt(0,GAME_HEIGHT));
-    socket.emit('move', {
+    /* socket.emit('move', {
         uuid: myUUID,
         pos: gamePieces[myUUID].pos,
         vel: gamePieces[myUUID].vel,
         color: myColor
-    });
+    }); */
+    for(let p of Object.keys(gamePieces)){
+        gamePieces[p].ping()
+    }
+
+    
+    
 }
+
+const pingAll = function(){
+    for(let p of Object.keys(gamePieces)){
+        gamePieces[p].ping()
+    }
+}
+
+
 
 function component(width, height, color, x, y,mass=PLAYER_MASS) {
     this.width = width;
     this.height = height;
+    this.heading = 0
+    this.uuid = myUUID
     this.radius = width / 2; // for circles
     this.mass = mass
-
     this.vel = {x:0,y:0}
     this.pos = {x:x,y:y}
+    this.angularVel = 0
     this.shipImage = new Image();
-    this.shipImage.src = 'ship.jpg';
+    this.shipImage.src = 'ship.png';
     this.noCollide  = false;
+    this.color = color
     this.update = function(it, itcolor) {
             let ctx = myGameArea.context;
 
             // A square
             //ctx.fillRect(this.x, this.y, this.width, this.height);
-
+            //this.heading += 2
             // A circle
-            let radius = this.radius;
+            /* let radius = this.radius;
             ctx.beginPath();
             ctx.arc(this.pos.x, this.pos.y, radius, 0, 2 * Math.PI)
             ctx.fillStyle = color;
-            ctx.fill();
+            ctx.fill(); */
+            ctx.strokeStyle = '#00ff00'
+            ctx.save()
+            ctx.translate(this.pos.x,this.pos.y)
+            ctx.rotate(rads(this.heading))
 
             // A ship
-            //ctx.drawImage(this.shipImage, 0, 0, this.shipImage.width, this.shipImage.height,this.x, this.y, this.width, this.height);
+            ctx.drawImage(this.shipImage, 0, 0, this.shipImage.width, this.shipImage.height,/* this.pos.x */-this.radius, /* this.pos.y */-this.radius, this.width, this.height);
+            let radius = this.radius;
+            ctx.beginPath();
+            ctx.arc(/* this.pos.x */0,0 /* this.pos.y */, radius, 0, 2 * Math.PI)
+            ctx.fillStyle = color;
+            ctx.stroke();
+
+            ctx.restore()
+
+           /*  ctx.strokeStyle = '#0000ff'
+            //ctx.beginPath();
+            ctx.arc(this.pos.x, this.pos.y, radius, 0, 2 * Math.PI)
+            ctx.fillStyle = color;
+            ctx.stroke(); */
 
             if (it) {
 
@@ -221,21 +263,30 @@ function component(width, height, color, x, y,mass=PLAYER_MASS) {
             }
         }
 
+    this.rotate = function(n){
+        this.heading += n
+        this.heading %= 360
+    }
+
     this.updatePos = function() {
         //console.log(`[[${this.pos.x},${this.pos.y}],[${this.vel.x},${this.vel.y}]]`)
 
         //if (NaN in this.vel || NaN in this.pos){throw this}
-        //for(let k of [this.vel.x,this.vel.y,this.pos.x,this.pos.y]){
-        //    if(k===NaN){throw this}
-        //}
+        for(let k of [this.vel.x,this.vel.y,this.pos.x,this.pos.y]){
+            if(isNaN(k)){throw NaN}
+        }
 
 
         this.pos = Vmath.add_vec(this.pos,this.vel)
         this.pos = Vmath.wrap_mod_xy(this.pos,GAME_WIDTH, GAME_HEIGHT)
         this.brake(GAME_FRICTION)
+        this.updateCollide()
 
+        
+    }
+    this.updateCollide = function(){
         for (var uuid in gamePieces) {
-            if (uuid != myUUID) {
+            if (uuid !== myUUID) {
                 if (checkOverlap(this, gamePieces[uuid])) {
                     //myGamePiece.newPos()
                         //console.log('overlap! ' + myUUID + " - " + uuid);
@@ -272,6 +323,14 @@ function component(width, height, color, x, y,mass=PLAYER_MASS) {
     }
     this.newVel = function(v){
         this.vel = v
+    }
+    this.ping = function(){
+        socket.emit('move', {
+            uuid: this.uuid,
+            pos: this.pos,
+            vel: this.vel,
+            color: this.color
+        });
     }
 }
 
@@ -326,8 +385,7 @@ function updateGameArea() {
             } //else { myGamePiece.vel.y = 0 }
         }
 
-    } else {
-
+    } /* else {
 
         if (myGameArea.keys && myGameArea.keys[37]) {
             myGamePiece.acel({x:-1,y:0})
@@ -344,6 +402,29 @@ function updateGameArea() {
         // end keypress checks
     }
 
+    if (myGameArea.keys && myGameArea.keys[32]) {
+        myGamePiece.rotate(0.017453292519943)
+    } */
+    else {
+
+        if (myGameArea.keys && myGameArea.keys[37]) {
+            //myGamePiece.acel({x:-1,y:0})
+            myGamePiece.rotate(-2)
+        }
+        if (myGameArea.keys && myGameArea.keys[39]) {
+            //myGamePiece.acel({x:1,y:0})
+            myGamePiece.rotate(2)
+        }
+        /* if (myGameArea.keys && myGameArea.keys[38]) {
+            myGamePiece.acel({x:0,y:-1})
+        } */
+        if (myGameArea.keys && myGameArea.keys[38]) {
+            let bb = rads((myGamePiece.heading-90))
+            myGamePiece.acel({x:Math.cos(bb),y:Math.sin(bb)})
+        }
+        // end keypress checks
+    }
+
     if (/*cango && */(myGamePiece.vel.x != 0 || myGamePiece.vel.y != 0)) {
         socket.emit('move', {
             uuid: myUUID,
@@ -353,7 +434,14 @@ function updateGameArea() {
         });
         //console.log(myGamePiece);
     } 
-   
+    for(let p of Object.keys(NPCs)){
+        NPCs[p].updatePos()
+        NPCs[p].update()
+        //console.log(NPCs[p])
+        NPCs[p].ping()
+    }
+
+    //r1.ping()
     myGamePiece.updatePos()
 
     for (var uuid in gamePieces) {
@@ -373,6 +461,26 @@ function updateGameArea() {
     }
 }
 
+class rock extends  component{
+    constructor(props){
+        super(props)
+        this.uuid = uuidv4()
+        this.shipImage.src = 'rock.png'
+        this.height = this.width
+        this.pos = {x:Math.random()*GAME_WIDTH,
+                    y:Math.random()*GAME_HEIGHT}
+        this.vel = {x:0,y:0}
+        
+    }
+
+    
+}
+
+var r1  = new rock(pieceWidth, pieceHeight, myColor)
+
+gamePieces[r1.uuid] = r1
+NPCs[r1.uuid] = r1
+
 function changeItColor(){itfill = (itfill === itfilla) ? itfillb : itfilla}
 
 function calcBounce(obj1,obj2,uuid1,uuid2){
@@ -391,6 +499,8 @@ function calcBounce(obj1,obj2,uuid1,uuid2){
     let b1 = Vmath.sub_vec(obj1.vel,obj2.vel)
     let a2 = Vmath.sub_vec(obj2.pos,obj1.pos)
     let b2 = Vmath.sub_vec(obj2.vel,obj1.vel)
+
+    if((a1.x == 0 || a1.y == 0) && (a2.x == 0 || a2.y == 0)){return}
 
     let aa1 = Vmath.times_num(Vmath.normalize(a1),obj1.radius+obj2.radius)
     let aa2 = Vmath.times_num(Vmath.normalize(a2),obj1.radius+obj2.radius)
@@ -443,9 +553,6 @@ function calcBounce(obj1,obj2,uuid1,uuid2){
 
 } 
 
-
-
-
 function checkOverlap(piece1, piece2) {
 
     // This is for square collision detection
@@ -465,6 +572,8 @@ function checkOverlap(piece1, piece2) {
     // This is for circle collision detection
 
     //let vsum = piece1.vel.add_vec_to(pi)
+
+    //return Vmath.magnitude(Vmath.sub_vec(piece1.pos,piece2.pos)) >= piece1.radius+piece2.radius
 
     let dx = piece1.pos.x - piece2.pos.x;
     let dy = piece1.pos.y - piece2.pos.y;
