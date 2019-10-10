@@ -25,5 +25,10 @@ function getRandomInt(max, min) {
 //const wrapMod = (x, n) => (x % n + n) % n
 function wrapMod(x, n) {return (x % n + n) % n}
 
+
+const rads = function(n){return ((n*3.14159265359)/180)/* %6.283185307179586 */}
+const degs = function(n){return ((n*180)/3.14159265359)}
+
+
 export default uuidv4;
-export {getRandomColor,getRandomInt,uuidv4,wrapMod};
+export {getRandomColor,getRandomInt,uuidv4,wrapMod,degs,rads};

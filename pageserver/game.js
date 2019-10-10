@@ -1,11 +1,8 @@
 "use strict"
 import {Vmath} from "./modules/vmath.js"
-import {uuidv4,getRandomColor,getRandomInt,wrapMod} from "./modules/funcs.js"
-
-console.log(Vmath)
-
-
-
+import {uuidv4,getRandomColor,getRandomInt,wrapMod,degs,rads} from "./modules/funcs.js"
+import {Renderer} from "./modules/renderer.js"
+import {GAME_HEIGHT,GAME_WIDTH,PLAYER_MASS,GAME_FRICTION,BOUNCINESS} from "./modules/constants.js"
 let myUUID = uuidv4();
 var gamePieces = {};
 var NPCs = {}
@@ -17,16 +14,16 @@ let pieceHeight = 60;
 const itfilla = '#aa0000';
 const itfillb = '#99ff00';
 var itfill = itfilla;
-const GAME_FRICTION = 0.975 // 1 = no friction , 0 = can't move
+/* const GAME_FRICTION = 0.975 // 1 = no friction , 0 = can't move
 const PLAYER_MASS = 20
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
-const BOUNCINESS = 1 ;  //1  = 100% bounce 
+const BOUNCINESS = 1 ;  //1  = 100% bounce  */
+
+var renderer  = new Renderer({x:GAME_WIDTH,y:GAME_HEIGHT})
 
 var cango = true;
 
-
-const rads = function(n){return ((n*3.14159265359)/180)/* %6.283185307179586 */}
 
 var socket = io('//:3000') // for localhost testing
     //var socket = io('https://nightwatch-server.now.sh')
@@ -82,10 +79,10 @@ socket.on('remove', function(data) {
 var myGameArea = {
     canvas: document.createElement("canvas"),
     start: function() {
-        this.canvas.width = GAME_WIDTH;
-        this.canvas.height = GAME_HEIGHT;
-        this.context = this.canvas.getContext("2d");
-        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        //this.canvas.width = GAME_WIDTH;
+        //this.canvas.height = GAME_HEIGHT;
+        //this.context = this.canvas.getContext("2d");
+        //document.body.insertBefore(this.canvas, document.body.childNodes[0]);
         //document.body.style.backgroundImage = "url('https://d2v9y0dukr6mq2.cloudfront.net/video/thumbnail/Hme4C4_7iosf3emf/stars-in-the-sky-looped-animation-beautiful-night-with-twinkling-flares-hd-1080_sr8wih9v__F0000.png')";
         this.interval = setInterval(updateGameArea, getRandomInt(5, 1));
         this.interval2 = setInterval(updateRefresh, getRandomInt(50, 10));
@@ -193,6 +190,7 @@ const pingAll = function(){
 function component(width, height, color, x, y,mass=PLAYER_MASS) {
     this.width = width;
     this.height = height;
+    this.dims = {x:width,y:height}
     this.heading = 0
     this.uuid = myUUID
     this.radius = width / 2; // for circles
@@ -205,67 +203,20 @@ function component(width, height, color, x, y,mass=PLAYER_MASS) {
     this.noCollide  = false;
     this.color = color
     this.update = function(it, itcolor) {
-            let ctx = myGameArea.context;
-
-            // A square
-            //ctx.fillRect(this.x, this.y, this.width, this.height);
-            //this.heading += 2
-            // A circle
-            /* let radius = this.radius;
-            ctx.beginPath();
-            ctx.arc(this.pos.x, this.pos.y, radius, 0, 2 * Math.PI)
-            ctx.fillStyle = color;
-            ctx.fill(); */
-            ctx.strokeStyle = '#00ff00'
-            ctx.save()
-            ctx.translate(this.pos.x,this.pos.y)
-            ctx.rotate(rads(this.heading))
-
-            // A ship
-            ctx.drawImage(this.shipImage, 0, 0, this.shipImage.width, this.shipImage.height,/* this.pos.x */-this.radius, /* this.pos.y */-this.radius, this.width, this.height);
-            let radius = this.radius;
-            ctx.beginPath();
-            ctx.arc(/* this.pos.x */0,0 /* this.pos.y */, radius, 0, 2 * Math.PI)
-            ctx.fillStyle = color;
-            ctx.stroke();
-
-            ctx.restore()
-
-           /*  ctx.strokeStyle = '#0000ff'
-            //ctx.beginPath();
-            ctx.arc(this.pos.x, this.pos.y, radius, 0, 2 * Math.PI)
-            ctx.fillStyle = color;
-            ctx.stroke(); */
-
+            renderer.image(this.shipImage,this.pos,this.dims,rads(this.heading))
             if (it) {
-
-                // This gives us a square
-
-                ctx.fillStyle = itcolor;
-                let ptf = 5;
-
-                // A circle in the middle
-                ctx.beginPath();
-                ctx.arc(this.pos.x, this.pos.y, ptf, 0, 2 * Math.PI)
-                ctx.fill();
-                // A square in the middle
-                //ctx.fillRect(this.x + (pieceWidth / ptf), this.y + (pieceHeight / ptf), this.width - ((
-                //    pieceWidth / ptf) * 2), this.height - ((pieceWidth / ptf) * 2));
-
-
-                /* This creates a hole in the ship */
-                /*
-                ctx.globalCompositeOperation = 'destination-out'
-                ctx.arc(this.x + width/2, this.y + height/2, 10, 0, 2*Math.PI)
-                ctx.fill()
-                */
-
+                renderer.filledCircle(itcolor,5,this.pos)
             }
         }
 
     this.rotate = function(n){
         this.heading += n
         this.heading %= 360
+    }
+
+    this.face = function(x,y){
+        this.heading = degs(Math.atan2(y-this.pos.y,x-this.pos.x))
+        //console.log(degs(Math.atan2(y-this.pos.y,x-this.pos.x)))
     }
 
     this.updatePos = function() {
@@ -335,28 +286,18 @@ function component(width, height, color, x, y,mass=PLAYER_MASS) {
 }
 
 function updateGameArea() {
-    myGameArea.clear();
+    //myGameArea.clear();
+    renderer.clear()
     var myGamePiece = gamePieces[myUUID];
 
     if (myGameArea.mouse) {
         let mouseX = myGameArea.mouseX
         let mouseY = myGameArea.mouseY
-            //console.log("X "+mouseX + " Y " + mouseY)
 
-        if (mouseX > 0) {
-            myGamePiece.acel({x:1,y:0})
 
-        } else if (mouseX < 0) {
-            myGamePiece.acel({x:-1,y:0})
-        } 
+        myGamePiece.face(mouseX,mouseY)
 
-        if (mouseY > 0) {
-            //myGamePiece.vel.y = 1;
-            myGamePiece.acel({x:0,y:1})
-        } else if (mouseY < 0) {
-            //myGamePiece.vel.y = -1;
-            myGamePiece.acel({x:0,y:-1})
-        } //else { myGamePiece.vel.y = 0 }
+
 
         // end mouse movement checks
     } else if (myGameArea.touch) {
@@ -385,26 +326,7 @@ function updateGameArea() {
             } //else { myGamePiece.vel.y = 0 }
         }
 
-    } /* else {
-
-        if (myGameArea.keys && myGameArea.keys[37]) {
-            myGamePiece.acel({x:-1,y:0})
-        }
-        if (myGameArea.keys && myGameArea.keys[39]) {
-            myGamePiece.acel({x:1,y:0})
-        }
-        if (myGameArea.keys && myGameArea.keys[38]) {
-            myGamePiece.acel({x:0,y:-1})
-        }
-        if (myGameArea.keys && myGameArea.keys[40]) {
-            myGamePiece.acel({x:0,y:1})
-        }
-        // end keypress checks
-    }
-
-    if (myGameArea.keys && myGameArea.keys[32]) {
-        myGamePiece.rotate(0.017453292519943)
-    } */
+    } 
     else {
 
         if (myGameArea.keys && myGameArea.keys[37]) {
