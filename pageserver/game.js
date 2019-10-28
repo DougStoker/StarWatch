@@ -5,7 +5,9 @@ import {Renderer} from "./modules/renderer.js"
 import {GAME_HEIGHT,GAME_WIDTH,PLAYER_MASS,GAME_FRICTION,BOUNCINESS} from "./modules/constants.js"
 let myUUID = uuidv4();
 var gamePieces = {};
-var NPCs = {}
+var projectiles = {}
+var enemyProjectiles = {}
+//var NPCs = {}
 let myColor = getRandomColor();
 var itUUID;
 let imit = false;
@@ -14,16 +16,32 @@ let pieceHeight = 60;
 const itfilla = '#aa0000';
 const itfillb = '#99ff00';
 var itfill = itfilla;
-/* const GAME_FRICTION = 0.975 // 1 = no friction , 0 = can't move
-const PLAYER_MASS = 20
-const GAME_WIDTH = 1280;
-const GAME_HEIGHT = 720;
-const BOUNCINESS = 1 ;  //1  = 100% bounce  */
 
 var renderer  = new Renderer({x:GAME_WIDTH,y:GAME_HEIGHT})
 
-var cango = true;
+class Projectile{
+    constructor(pos,vel,name){
+        this.radius = 1
+        this.name = name
+        this.pos = pos
+        this.vel = vel
+        this.lifetime = 200
+        this.color = '#ff0000'
+    }
+    update = () =>{
+        this.pos = Vmath.add_vec(this.pos,this.vel)
+        this.pos = Vmath.wrap_mod_xy(this.pos,GAME_WIDTH, GAME_HEIGHT)
 
+        renderer.filledCircle(this.color,2,this.pos)
+        this.lifetime -=1
+        if(this.lifetime <= 0){
+            delete projectiles[this.name]
+            delete enemyProjectiles[this.name]
+        }
+        /* for(l)
+        if(Vmath.magnitude(Vmath.sub_vec(enemyProjectiles[bullet].pos,this.pos)) < this.radius) */
+    }
+}
 
 var socket = io('//:3000') // for localhost testing
     //var socket = io('https://nightwatch-server.now.sh')
@@ -49,7 +67,7 @@ socket.on('it', (data) => {
     setTimeout(function() {
         clearInterval(flashIt);
         itfill = itfilla;
-    }, 3000);
+    }, 30000);
 })
 
 socket.on('moved', function(data) {
@@ -62,6 +80,7 @@ socket.on('moved', function(data) {
         //gamePieces[data.uuid].pos.y = data.y;
         gamePieces[data.uuid].pos = data.pos
         gamePieces[data.uuid].vel = data.vel
+        gamePieces[data.uuid].heading = data.heading
     } else {
         gamePieces[data.uuid] = new component(pieceWidth, pieceHeight, data.color, data.pos.x, data.pos.y);
     }
@@ -74,7 +93,18 @@ socket.on('remove', function(data) {
     }
 })
 
+socket.on('shoot', function(data){
+    if (data.uuid != myUUID){
+        let n = getRandomInt(1,10000000)
+        enemyProjectiles[n] = new Projectile(data.pos,data.vel,n)
+    }
+})
 
+socket.on('ouch', function(data){
+    if (data.uuid != myUUID){
+        gamePieces[data.uuid].health = data.hp
+    }
+})
 
 var myGameArea = {
     canvas: document.createElement("canvas"),
@@ -83,7 +113,8 @@ var myGameArea = {
         //this.canvas.height = GAME_HEIGHT;
         //this.context = this.canvas.getContext("2d");
         //document.body.insertBefore(this.canvas, document.body.childNodes[0]);
-        //document.body.style.backgroundImage = "url('https://d2v9y0dukr6mq2.cloudfront.net/video/thumbnail/Hme4C4_7iosf3emf/stars-in-the-sky-looped-animation-beautiful-night-with-twinkling-flares-hd-1080_sr8wih9v__F0000.png')";
+        //document.body.style.backgroundImage = "url('https://d2v9y0dukr6mq2.cloudfront.net/video/thumbnail/Hme4C4_7iosf3emf/
+        //stars-in-the-sky-looped-animation-beautiful-night-with-twinkling-flares-hd-1080_sr8wih9v__F0000.png')";
         this.interval = setInterval(updateGameArea, getRandomInt(5, 1));
         this.interval2 = setInterval(updateRefresh, getRandomInt(50, 10));
         window.addEventListener('keydown', function(e) {
@@ -151,10 +182,6 @@ var myGameArea = {
     }
 }
 
-
-
-
-
 function updateRefresh() {
     clearInterval(myGameArea.interval);
     clearInterval(myGameArea.interval2);
@@ -185,12 +212,12 @@ const pingAll = function(){
     }
 }
 
-
-
 function component(width, height, color, x, y,mass=PLAYER_MASS) {
     this.width = width;
     this.height = height;
     this.dims = {x:width,y:height}
+    this.shootTimer = 15
+    this.health = 30000 //needs to be un-hardcoded later
     this.heading = 0
     this.uuid = myUUID
     this.radius = width / 2; // for circles
@@ -198,42 +225,82 @@ function component(width, height, color, x, y,mass=PLAYER_MASS) {
     this.vel = {x:0,y:0}
     this.pos = {x:x,y:y}
     this.angularVel = 0
-    this.shipImage = new Image();
-    this.shipImage.src = 'ship.png';
+    this.shipImageOff = new Image();
+    this.shipImageOn = new Image();
+    this.shipImageOn.src = 'ship_cyan_on.png';
+    this.shipImageOff.src = 'ship_cyan_off.png';
     this.noCollide  = false;
     this.color = color
     this.update = function(it, itcolor) {
-            renderer.image(this.shipImage,this.pos,this.dims,rads(this.heading))
+        this.shootTimer -=1
+            renderer.image(Math.abs(this.vel.x) > 0.5 || Math.abs(this.vel.y) > 0.5 ?  this.shipImageOn : this.shipImageOff ,this.pos,this.dims,rads(this.heading))
             if (it) {
                 renderer.filledCircle(itcolor,5,this.pos)
             }
+            renderer.hpBar(this.pos,this.radius,this.health)
         }
-
     this.rotate = function(n){
         this.heading += n
         this.heading %= 360
     }
-
     this.face = function(x,y){
-        this.heading = degs(Math.atan2(y-this.pos.y,x-this.pos.x))
+        this.heading = degs(Math.atan2(y-this.pos.y,x-this.pos.x))+90
         //console.log(degs(Math.atan2(y-this.pos.y,x-this.pos.x)))
     }
 
-    this.updatePos = function() {
-        //console.log(`[[${this.pos.x},${this.pos.y}],[${this.vel.x},${this.vel.y}]]`)
-
-        //if (NaN in this.vel || NaN in this.pos){throw this}
-        for(let k of [this.vel.x,this.vel.y,this.pos.x,this.pos.y]){
-            if(isNaN(k)){throw NaN}
+    this.checkOuch = function(){
+        for(let bullet in enemyProjectiles){
+/*             if(Vmath.magnitude(Vmath.sub_vec(enemyProjectiles[bullet].pos,this.pos)) < this.radius){
+                //delete enemyProjectiles[bullet]
+                this.health -= 1
+            } */
+            if(checkOverlap(enemyProjectiles[bullet],this)){
+                this.health -=1
+                socket.emit('ouch',{
+                    uuid:this.uuid,
+                    hp:this.health
+                })
+            }
         }
+        renderer.myHealthBar(this.health,GAME_WIDTH)
+    }
+    this.shoot = function(){
+        
+        if(this.shootTimer > 0){
+            
+            return
+        }
+        if(this.shootTimer < -5){
+            this.shootTimer = 50
 
-
+        }
+        
+        let h = rads(this.heading-90)
+        let vx = Math.cos(h)*2 + this.vel.x
+        let vy = Math.sin(h)*2 + this.vel.y
+        let n = getRandomInt(1,10000000)
+        projectiles[n] = new Projectile(this.pos,{x:vx,y:vy},n)
+        socket.emit('shoot', {
+            uuid: this.uuid,
+            pos: this.pos,
+            vel: {x:vx,y:vy},
+            //name: n
+            //heading: obj1.heading,
+            //color: obj1.color
+        })
+        
+    }
+    this.updatePos = function() {
+        if(isNaN(this.pos.x) || isNaN(this.pos.y)){
+            throw "position NaN"
+        }
+        if(isNaN(this.vel.x) || isNaN(this.vel.y)){
+            throw "velocity NaN"
+        }
         this.pos = Vmath.add_vec(this.pos,this.vel)
         this.pos = Vmath.wrap_mod_xy(this.pos,GAME_WIDTH, GAME_HEIGHT)
         this.brake(GAME_FRICTION)
         this.updateCollide()
-
-        
     }
     this.updateCollide = function(){
         for (var uuid in gamePieces) {
@@ -344,6 +411,10 @@ function updateGameArea() {
             let bb = rads((myGamePiece.heading-90))
             myGamePiece.acel({x:Math.cos(bb),y:Math.sin(bb)})
         }
+
+        if (myGameArea.keys && myGameArea.keys[32]) {
+            myGamePiece.shoot()
+        }
         // end keypress checks
     }
 
@@ -352,16 +423,17 @@ function updateGameArea() {
             uuid: myUUID,
             pos: myGamePiece.pos,
             vel: myGamePiece.vel,
+            heading: myGamePiece.heading,
             color: myColor
         });
         //console.log(myGamePiece);
     } 
-    for(let p of Object.keys(NPCs)){
+    /* for(let p of Object.keys(NPCs)){
         NPCs[p].updatePos()
         NPCs[p].update()
         //console.log(NPCs[p])
         NPCs[p].ping()
-    }
+    } */
 
     //r1.ping()
     myGamePiece.updatePos()
@@ -381,9 +453,23 @@ function updateGameArea() {
         }
         gamePieces[uuid].update(uuid == itUUID, itfill);
     }
+    for(let bullet in projectiles){
+        projectiles[bullet].update()
+    }
+    for(let bullet in enemyProjectiles){
+        enemyProjectiles[bullet].update()
+    }
+
+    myGamePiece.checkOuch()
+
+/*     for(let player in gamePieces){
+        if (player != myUUID) {
+            gamePieces[player].checkOuch()
+        }
+    } */
 }
 
-class rock extends  component{
+/* class rock extends  component{
     constructor(props){
         super(props)
         this.uuid = uuidv4()
@@ -396,12 +482,12 @@ class rock extends  component{
     }
 
     
-}
+} */
 
-var r1  = new rock(pieceWidth, pieceHeight, myColor)
+//var r1  = new rock(pieceWidth, pieceHeight, myColor)
 
-gamePieces[r1.uuid] = r1
-NPCs[r1.uuid] = r1
+//gamePieces[r1.uuid] = r1
+//NPCs[r1.uuid] = r1
 
 function changeItColor(){itfill = (itfill === itfilla) ? itfillb : itfilla}
 
@@ -463,6 +549,7 @@ function calcBounce(obj1,obj2,uuid1,uuid2){
         uuid: uuid1,
         pos: obj1.pos,
         vel: obj1.vel,
+        heading: obj1.heading,
         color: obj1.color
     }); 
 
@@ -470,6 +557,7 @@ function calcBounce(obj1,obj2,uuid1,uuid2){
         uuid: uuid2,
         pos: obj2.pos,
         vel: obj2.vel,
+        heading: obj2.heading,
         color: obj2.color
     });
 

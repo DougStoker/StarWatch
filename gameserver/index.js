@@ -26,7 +26,16 @@ function onConnection(socket) {
 		} 
 	    //console.log('move received: ');
 	    //console.log(data);
-	});
+    });
+    
+    socket.on('shoot', (data) => {
+        socket.broadcast.emit('shoot', data)
+
+    })
+    socket.on('ouch', (data) => {
+        socket.broadcast.emit('ouch', data)
+        
+    })
 
 	socket.on('tagged', (data) => {
 		if (data.olduuid && data.newuuid && getTaggable()) {
